@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=tQEMU
+GenericName=QEMU Frontend
+Comment=A simple QEMU frontend written in core Tcl/Tk
+Exec=tqemu %F
+Icon=qemu
+Type=Application
+Terminal=false
+Keywords=Emulators;Virtualization;KVM;
+Categories=System;Emulator;
+StartupNotify=false
+MimeType=application/octet-stream;application/x-qemu-disk;

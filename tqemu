@@ -1,0 +1,425 @@
+#!/usr/bin/env wish
+
+package require Tk
+
+################################################################################
+# VARIABLES
+#
+namespace eval tQEMU {
+  variable bin     [append bin qemu-system- $::tcl_platform(machine)]
+  variable cpu     {host}
+  variable cpulist [list host max base qemu32 qemu64 kvm32 kvm64 486 pentium \
+    pentium2 pentium3 coreduo core2duo n270 Broadwell Conroe Deverton Dhyana \
+    EPYC Haswell IvyBridge KnightMill Nehalem Opteron_G1 Opteron_G2 Opteron_G3 \
+    Opteron_G4 Opteron_G5 Penryn SandyBridge Snowridge Westmere]
+  variable ram     1024
+  variable ramlist [list 128 254 512 1024 2048 4096]
+  variable vga     {std}
+  variable vgalist [list none std cirrus vmware xenfb qxl virtio]
+  variable snd     {ac97}
+  variable sndlist [list sb16 es1370 ac97 adlib gus cs4231a hda pcspk all]
+  variable nic     {e1000}
+  variable niclist [list e1000 e1000-82544gc e1000-82545em e1000e i82550 \
+    i82551 i82557a i82557b i82557c i82558a i82558b i82559a i82559b i82559c \
+    i82559er i82562 i82801 ne2k_pci pcnet rocker rtl8139 tulip vmxnet3 none]
+  variable iso     {}
+  variable dir     {}
+  variable img     {}
+  variable states  [list]
+  variable imgsize 20
+  variable msg     [list]
+  variable kvm     1
+  variable daemon  1
+  variable fscreen 0
+  variable display {gtk}
+  variable theme   [ttk::style theme use]
+}
+
+################################################################################
+# PROCEDURES
+#
+proc selectISOImage {widget} {
+  set filetypes {
+    {{ISO Files} {.iso}}
+  }
+  set tQEMU::iso [tk_getOpenFile -title "Select ISO Image" -parent . \
+    -filetypes $filetypes -multiple false]
+  if {$tQEMU::iso eq ""} {
+    set tQEMU::msg [list]
+    return 1
+  }
+  $widget xview end
+  set tQEMU::msg [list $tQEMU::iso ready]
+}
+
+proc selectQEMUImage {widget} {
+  set filetypes {
+    {{QCOW2} {.qcow2}}
+    {{RAW}   {.raw}}
+  }
+  set tQEMU::img [tk_getOpenFile -title "Select QEMU Image File" -parent . \
+    -filetypes $filetypes -multiple false]
+  if {$tQEMU::img eq ""} {
+    set tQEMU::states [list]
+    set tQEMU::msg [list]
+  } else {
+    set tQEMU::msg [list $tQEMU::img ready]
+    set stateslist [exec -ignorestderr -- qemu-img snapshot -l $tQEMU::img]
+    set tQEMU::states [lsearch -all -inline \
+      -regexp $stateslist {vm-([[:digit:]]){14}\M}]
+  }
+  $widget xview end
+}
+
+proc createQEMUImage {widget} {
+  set filetypes {
+    {{QCOW2} {.qcow2}}
+    {{RAW}   {.raw}}
+  }
+  set filename [tk_getSaveFile -title "Create QEMU Image File" -parent . \
+    -filetypes $filetypes -defaultextension .qcow2]
+  if {$filename eq ""} {return 1}
+  append imgsize $tQEMU::imgsize "G"
+  exec -ignorestderr -- qemu-img create -f qcow2 $filename $imgsize
+  set tQEMU::img $filename
+  $widget xview end
+  set tQEMU::states [list]
+  set tQEMU::msg [list $filename created Size:$imgsize Type:qcow2]
+}
+
+proc selectSharedDir {widget} {
+  set tQEMU::dir [tk_chooseDirectory -title "Select Shared Directory" -parent . \
+    -mustexist true]
+  if {$tQEMU::dir eq ""} {return 1}
+  $widget xview end
+  set tQEMU::msg [list $tQEMU::dir share enabled]
+}
+
+proc selectBinary {widget} {
+  set executable [tk_getOpenFile -title "Select QEMU Executable File" -parent . \
+    -multiple false]
+  if {$executable eq ""} {return 1}
+  if {[auto_execok [file nativename $executable]] eq ""} {
+    tk_messageBox -title "ERROR" -icon error -type ok -parent . \
+      -message "[file tail $executable]:" \
+      -detail "Not a valid executable file"
+    return 1
+  }
+  set tQEMU::bin $executable
+  $widget xview end
+}
+
+proc loadState {loadvm} {
+  if {$loadvm eq ""} {return 1}
+  set command [buildExecCmd]
+  lappend command -loadvm $loadvm
+  startQEMU $command
+  set tQEMU::msg [list QEMU is loading state $loadvm...]
+}
+
+proc deleteState {state} {
+  if {$state eq ""} {return 1}
+  exec -ignorestderr -- qemu-img snapshot -d $state $tQEMU::img &
+  .lb_states delete active
+  set tQEMU::msg [list $state deleted]
+}
+
+proc buildExecCmd {} {
+  set command [list [file nativename $tQEMU::bin] -name tQEMU \
+    -display $tQEMU::display -cpu $tQEMU::cpu -m $tQEMU::ram \
+    -vga $tQEMU::vga -soundhw $tQEMU::snd]
+  if {$tQEMU::kvm == 1} {
+    lappend command -enable-kvm
+  }
+  if {$tQEMU::daemon == 1} {
+    lappend command -daemonize
+  }
+  if {$tQEMU::fscreen == 1} {
+    lappend command -full-screen
+  }
+  if {$tQEMU::nic eq "none"} {
+    lappend command -nic none
+  } else {
+    lappend command -device $tQEMU::nic,netdev=vnet0
+    if {$tQEMU::dir eq ""} {
+      lappend command -netdev user,id=vnet0
+    } else {
+      lappend command -netdev user,id=vnet0,smb=$tQEMU::dir
+    }
+  }
+  if {$tQEMU::img ne ""} {
+    lappend command -hda $tQEMU::img
+    set tQEMU::msg [list QEMU is starting $tQEMU::img...]
+  }
+  if {$tQEMU::iso ne ""} {
+    lappend command -cdrom $tQEMU::iso -boot order=dc
+    set tQEMU::msg [list QEMU is starting $tQEMU::iso...]
+  }
+  return $command
+}
+
+proc startQEMU {cmd} {
+  exec -ignorestderr -- {*}$cmd
+}
+
+proc showCommand {} {
+  set command [buildExecCmd]
+  tk_messageBox -title "Show Command" -icon info -type ok -parent . \
+    -message "QEMU Command:" -detail $command
+}
+
+proc copyCommand {} {
+  set command [buildExecCmd]
+  clipboard append -type STRING -- $command
+  set tQEMU::msg "Command copied to clipboard"
+}
+
+proc helpAbout {} {
+  tk_messageBox -title "About tQEMU" -icon info -type ok -parent . \
+    -message "tQEMU" -detail \
+{A simple QEMU frontend,
+written in core Tcl/Tk.
+
+MIT License
+
+Copyright (c) Thanos Zygouris
+<athanasios.zygouris@gmail.com>}
+}
+
+proc aboutQEMU {} {
+  tk_messageBox -title "About QEMU" -icon info -type ok -parent . \
+    -message "What is QEMU" -detail \
+{QEMU is a generic and open source
+machine emulator and virtualizer.
+
+For more informations, visit:
+    https://www.qemu.org}
+}
+
+################################################################################
+# MENUS
+#
+proc createMenus {} {
+  option add *tearOff false
+  . configure -menu [menu .menu]
+  .menu add cascade -label "File" -underline 0 -menu [menu .menu.file]
+    .menu.file add command -label "Start QEMU..." -underline 1 \
+      -accelerator "F5" -command {.b_start invoke}
+    .menu.file add separator
+    .menu.file add command -label "Select ISO Image..." -underline 8 \
+      -accelerator "F2" -command {.b_iso invoke}
+    .menu.file add command -label "Select QEMU Image..." -underline 7 \
+      -accelerator "F3" -command {.b_img invoke}
+    .menu.file add command -label "Create QEMU Image..." -underline 0 \
+      -accelerator "F4" -command {.b_create invoke}
+    .menu.file add separator
+    .menu.file add command -label "Shared Directory..." -underline 7 \
+      -accelerator "F6" -command {.b_dir invoke}
+    .menu.file add separator
+    .menu.file add command -label "QEMU Executable..." -underline 5 \
+      -accelerator "F7" -command {.b_bin invoke}
+    .menu.file add separator
+    .menu.file add command -label "Exit" -underline 1 \
+      -accelerator "Ctrl+Q" -command {exit}
+  .menu add cascade -label "Options" -underline 0 -menu [menu .menu.options]
+    .menu.options add checkbutton -label "Enable KVM" -underline 7 \
+      -variable tQEMU::kvm
+    .menu.options add checkbutton -label "Daemonize" -underline 7 \
+      -accelerator "Ctrl+D" -variable tQEMU::daemon
+    .menu.options add separator
+    .menu.options add cascade -label "Display" -underline 0 -menu [menu .menu.options.display]
+      foreach display [list sdl gtk spice-app] {
+      .menu.options.display add radiobutton -label $display \
+        -variable tQEMU::display -value $display
+      }
+    .menu.options add separator
+    .menu.options add checkbutton -label "Fullscreen" -underline 0 \
+      -accelerator "Ctrl+F" -variable tQEMU::fscreen
+    .menu.options add separator
+    .menu.options add cascade -label "Themes" -underline 0 -menu [menu .menu.options.themes]
+      foreach theme [ttk::style theme names] {
+        .menu.options.themes add radiobutton -label $theme -variable tQEMU::theme \
+          -value $theme -command [list ttk::style theme use $theme]
+      }
+    .menu.options add separator
+    .menu.options add command -label "Show Command..." -underline 0 -command {showCommand}
+    .menu.options add command -label "Copy Command" -underline 0 \
+      -accelerator "Ctrl+C" -command {copyCommand}
+  .menu add cascade -label "Help" -underline 0 -menu [menu .menu.help]
+    .menu.help add command -label "About tQEMU..." -underline 0 \
+      -accelerator "F1" -command {helpAbout}
+    .menu.help add command -label "About QEMU..." -underline 6 \
+      -command {aboutQEMU}
+}
+
+################################################################################
+# TTK STYLES
+#
+ttk::style configure custom.TLabelframe -relief flat
+################################################################################
+# WIDGETS
+#
+proc createWidgets {} {
+  ttk::labelframe .lf_vm -text "\u2022 Virtual Machine Configuration:" -style custom.TLabelframe
+    ttk::label .lb_cpu -text "CPU:"
+    ttk::combobox .cb_cpu -takefocus 0 -state readonly \
+      -textvariable tQEMU::cpu -values $tQEMU::cpulist
+    ttk::label .lb_ram -text "RAM:"
+    ttk::combobox .cb_ram -takefocus 0 -state readonly \
+      -textvariable tQEMU::ram -values $tQEMU::ramlist
+    ttk::label .lb_vga -text "VGA:"
+    ttk::combobox .cb_vga -takefocus 0 -state readonly \
+      -textvariable tQEMU::vga -values $tQEMU::vgalist
+    ttk::label .lb_snd -text "Sound:"
+    ttk::combobox .cb_snd -takefocus 0 -state readonly \
+      -textvariable tQEMU::snd -values $tQEMU::sndlist
+    ttk::label .lb_nic -text "Network:"
+    ttk::combobox .cb_nic -takefocus 0 -state readonly \
+      -textvariable tQEMU::nic -values $tQEMU::niclist
+    grid .lb_cpu -in .lf_vm -row 0 -column 0 -sticky we
+    grid .cb_cpu -in .lf_vm -row 0 -column 1 -sticky we
+    grid .lb_ram -in .lf_vm -row 1 -column 0 -sticky we
+    grid .cb_ram -in .lf_vm -row 1 -column 1 -sticky we
+    grid .lb_vga -in .lf_vm -row 2 -column 0 -sticky we
+    grid .cb_vga -in .lf_vm -row 2 -column 1 -sticky we
+    grid .lb_snd -in .lf_vm -row 3 -column 0 -sticky we
+    grid .cb_snd -in .lf_vm -row 3 -column 1 -sticky we
+    grid .lb_nic -in .lf_vm -row 4 -column 0 -sticky we
+    grid .cb_nic -in .lf_vm -row 4 -column 1 -sticky we
+    grid columnconfigure .lf_vm .lb_cpu -weight 1
+
+  ttk::labelframe .lf_iso -text "\u2022 Bootable ISO Image:" -style custom.TLabelframe
+    ttk::entry  .e_iso -takefocus 0 -state readonly -textvariable tQEMU::iso
+    ttk::button .b_iso -takefocus 0 -text "Browse..." \
+      -command [list selectISOImage .e_iso]
+    grid .e_iso -in .lf_iso -row 0 -column 0 -sticky we
+    grid .b_iso -in .lf_iso -row 0 -column 1 -sticky e
+    grid columnconfigure .lf_iso .e_iso -weight 1
+
+  ttk::labelframe .lf_dir -text "\u2022 Shared Directory:" -style custom.TLabelframe
+    ttk::entry  .e_dir -takefocus 0 -state readonly -textvariable tQEMU::dir
+    ttk::button .b_dir -takefocus 0 -text "Browse..." \
+      -command [list selectSharedDir .e_dir]
+    grid .e_dir -in .lf_dir -row 0 -column 0 -sticky we
+    grid .b_dir -in .lf_dir -row 0 -column 1 -sticky e
+    grid columnconfigure .lf_dir .e_dir -weight 1
+
+  ttk::labelframe .lf_cmd -text "\u2022 Action:" -style custom.TLabelframe
+    ttk::button .b_about -takefocus 0 -text "About..." -underline 0 \
+      -command {helpAbout}
+    ttk::button .b_start -takefocus 0 -text "Start"    -underline 0 \
+      -command {startQEMU [buildExecCmd]}
+    ttk::button .b_exit  -takefocus 0 -text "Exit"     -underline 1 \
+      -command {exit}
+    grid .b_about -in .lf_cmd -row 0 -column 0 -sticky w
+    grid .b_start -in .lf_cmd -row 0 -column 1
+    grid .b_exit  -in .lf_cmd -row 0 -column 2 -sticky e
+    grid columnconfigure .lf_cmd .b_start -weight 1
+
+  ttk::labelframe .lf_bin -text "\u2022 QEMU Executable:" -style custom.TLabelframe
+    ttk::entry  .e_bin -takefocus 0 -state readonly -textvariable tQEMU::bin
+    ttk::button .b_bin -takefocus 0 -text "Browse..." \
+      -command {selectBinary .e_bin}
+    grid .e_bin -in .lf_bin -row 0 -column 0 -sticky we
+    grid .b_bin -in .lf_bin -row 0 -column 1 -sticky w
+    grid columnconfigure .lf_bin .e_bin -weight 1
+
+  ttk::labelframe .lf_img -text "\u2022 QEMU Image:" -style custom.TLabelframe
+    ttk::entry  .e_img -takefocus 0 -state readonly -textvariable tQEMU::img
+    ttk::button .b_img -takefocus 0 -text "Browse..." \
+      -command [list selectQEMUImage .e_img]
+    ttk::label   .l_create -text "Create QEMU Image (GB): " -anchor e
+    ttk::spinbox .sb_imgsize -takefocus 0 -state readonly \
+      -width 5 -textvariable tQEMU::imgsize \
+      -from 10 -to 200 -increment 5 -format %02.0f
+    ttk::button .b_create -takefocus 0 -text "Create..." -underline 0 \
+      -command [list createQEMUImage .e_img]
+    grid .e_img      -in .lf_img -row 0 -column 0 -sticky we -columnspan 2
+    grid .b_img      -in .lf_img -row 0 -column 2 -sticky w
+    grid .l_create   -in .lf_img -row 1 -column 0 -sticky we
+    grid .sb_imgsize -in .lf_img -row 1 -column 1 -sticky e
+    grid .b_create   -in .lf_img -row 1 -column 2 -sticky w
+    grid columnconfigure .lf_img .l_create -weight 1
+
+  ttk::labelframe .lf_states -text "\u2022 Saved States:" -style custom.TLabelframe
+    tk::listbox .lb_states -takefocus 0 -height 8 \
+      -listvariable tQEMU::states -yscrollcommand {.lb_yscroll set}
+    ttk::scrollbar .lb_yscroll -orient vertical -command {.lb_states yview}
+    grid .lb_states  -in .lf_states -row 0 -column 0 -sticky news
+    grid .lb_yscroll -in .lf_states -row 0 -column 1 -sticky ns
+    grid columnconfigure .lf_states .lb_states -weight 1
+
+  ttk::frame .f_statusbar -borderwidth 1 -relief sunken
+      ttk::label .lb_msg -relief flat -anchor w -textvariable tQEMU::msg
+      ttk::sizegrip .sizegrip
+      grid .lb_msg   -in .f_statusbar -row 0 -column 0 -sticky we
+      grid .sizegrip -in .f_statusbar -row 0 -column 1 -sticky e
+      grid columnconfigure .f_statusbar .lb_msg -weight 1
+
+  grid .lf_vm       -in . -row 0 -column 0 -sticky we -rowspan 2
+  grid .lf_iso      -in . -row 2 -column 0 -sticky we
+  grid .lf_dir      -in . -row 3 -column 0 -sticky we
+  grid .lf_cmd      -in . -row 4 -column 0 -sticky we
+  grid .lf_bin      -in . -row 0 -column 1 -sticky we
+  grid .lf_img      -in . -row 1 -column 1 -sticky we
+  grid .lf_states   -in . -row 2 -column 1 -sticky we -rowspan 3
+  grid .f_statusbar -in . -row 5 -column 0 -sticky we -columnspan 2
+  grid rowconfigure    . .lf_states -weight 1
+  grid columnconfigure . .lf_states -weight 1
+}
+
+################################################################################
+# BINDINGS
+#
+proc createBindings {} {
+  bind . <KP_Enter>  {event generate %W <Return>}
+  bind . <F1>        {.b_about invoke}
+  bind . <F2>        {.b_iso invoke}
+  bind . <F3>        {.b_img invoke}
+  bind . <F4>        {.b_create invoke}
+  bind . <F5>        {.b_start invoke}
+  bind . <F6>        {.b_dir invoke}
+  bind . <F7>        {.b_bin invoke}
+  bind . <Control-d> {.menu.options invoke "Daemonize"}
+  bind . <Control-D> {.menu.options invoke "Daemonize"}
+  bind . <Control-f> {.menu.options invoke "Fullscreen"}
+  bind . <Control-F> {.menu.options invoke "Fullscreen"}
+  bind . <Control-c> {copyCommand}
+  bind . <Control-C> {copyCommand}
+  bind . <Control-q> {exit}
+  bind . <Control-Q> {exit}
+
+  foreach keysym [list <Return> <Double-ButtonRelease-1>] {
+    bind .lb_states $keysym {loadState [.lb_states get active]}
+  }
+  bind .lb_states <Delete> {deleteState [.lb_states get active]}
+}
+
+################################################################################
+# MAIN PROGRAM
+#
+createMenus
+createWidgets
+createBindings
+
+wm title     . [list tQEMU $tQEMU::bin]
+wm minsize   . 525 260
+wm resizable . 0 0
+wm protocol  . WM_DELETE_WINDOW {exit}
+
+################################################################################
+# COMMAND LINE
+#
+if {$::argc > 0 && $::argc < 3} {
+  foreach filename $::argv {
+    if [file isfile $filename] {
+      set filetype [file extension $filename]
+      switch -- $filetype {
+        .iso   {set tQEMU::iso $filename}
+        .qcow2 {set tQEMU::img $filename}
+      }
+    }
+  }
+  startQEMU [buildExecCmd]
+  exit
+}
