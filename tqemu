@@ -40,7 +40,7 @@ namespace eval tQEMU {
 #
 proc selectISOImage {widget} {
   set filetypes {
-    {{ISO Files} {.iso}}
+    {{ISO Files} {.iso .ISO}}
   }
   set tQEMU::iso [tk_getOpenFile -title "Select ISO Image" -parent . \
     -filetypes $filetypes -multiple false]
@@ -54,8 +54,8 @@ proc selectISOImage {widget} {
 
 proc selectQEMUImage {widget} {
   set filetypes {
-    {{QCOW2} {.qcow2}}
-    {{RAW}   {.raw}}
+    {{QCOW2} {.qcow2 .QCOW2}}
+    {{RAW}   {.raw .RAW}}
   }
   set tQEMU::img [tk_getOpenFile -title "Select QEMU Image File" -parent . \
     -filetypes $filetypes -multiple false]
@@ -73,8 +73,8 @@ proc selectQEMUImage {widget} {
 
 proc createQEMUImage {widget} {
   set filetypes {
-    {{QCOW2} {.qcow2}}
-    {{RAW}   {.raw}}
+    {{QCOW2} {.qcow2 .QCOW2}}
+    {{RAW}   {.raw .RAW}}
   }
   set filename [tk_getSaveFile -title "Create QEMU Image File" -parent . \
     -filetypes $filetypes -defaultextension .qcow2]
