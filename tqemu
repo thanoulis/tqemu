@@ -46,7 +46,7 @@ proc selectISOImage {widget} {
     -title "Select ISO Image" -filetypes $filetypes -multiple false]]
   if {$tQEMU::iso eq ""} {
     set tQEMU::msg ""
-    return 1
+    return 2
   }
   $widget xview end
   set tQEMU::msg "$tQEMU::iso ready"
@@ -79,7 +79,7 @@ proc createQEMUImage {widget} {
   set filename [file nativename [tk_getSaveFile -parent . \
     -title "Create QEMU Image File" -filetypes $filetypes \
     -defaultextension .qcow2]]
-  if {$filename eq ""} {return 1}
+  if {$filename eq ""} {return 2}
   append imgsize $tQEMU::imgsize "G"
   exec -ignorestderr -- qemu-img create -f qcow2 $filename $imgsize
   set tQEMU::img $filename
@@ -93,7 +93,7 @@ proc selectSharedDir {widget} {
     -title "Select Shared Directory" -mustexist true]]
   if {$tQEMU::dir eq ""} {
     set tQEMU::msg "share disabled"
-    return 1
+    return 2
   }
   $widget xview end
   set tQEMU::msg "$tQEMU::dir share enabled"
@@ -102,7 +102,7 @@ proc selectSharedDir {widget} {
 proc selectBinary {widget} {
   set executable [file nativename [tk_getOpenFile -parent . \
     -title "Select QEMU Executable File" -multiple false]]
-  if {$executable eq ""} {return 1}
+  if {$executable eq ""} {return 2}
   if {[auto_execok $executable] eq ""} {
     tk_messageBox -title "ERROR" -icon error -type ok -parent . \
       -message "[file tail $executable]:" -detail "Not a valid executable file"
