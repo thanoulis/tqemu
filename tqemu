@@ -1,4 +1,4 @@
-#!/usr/bin/env wish
+#!/usr/bin/env tclsh
 
 package require Tk
 
@@ -6,7 +6,7 @@ package require Tk
 # VARIABLES
 #
 namespace eval tQEMU {
-  variable bin     [append bin qemu-system- $::tcl_platform(machine)]
+  variable bin     [append bin "qemu-system-" $::tcl_platform(machine)]
   variable cpu     {host}
   variable cpulist [list host max base qemu32 qemu64 kvm32 kvm64 486 pentium \
     pentium2 pentium3 coreduo core2duo n270 Broadwell Conroe Deverton Dhyana \
@@ -16,7 +16,7 @@ namespace eval tQEMU {
   variable ramlist [list 128 254 512 1024 2048 4096]
   variable vga     {std}
   variable vgalist [list none std cirrus vmware xenfb qxl virtio]
-  variable snd     {ac97}
+  variable snd     {hda}
   variable sndlist [list sb16 es1370 ac97 adlib gus cs4231a hda pcspk all]
   variable nic     {e1000}
   variable niclist [list e1000 e1000-82544gc e1000-82545em e1000e i82550 \
@@ -42,14 +42,14 @@ proc selectISOImage {widget} {
   set filetypes {
     {{ISO Files} {.iso .ISO}}
   }
-  set tQEMU::iso [tk_getOpenFile -title "Select ISO Image" -parent . \
-    -filetypes $filetypes -multiple false]
+  set tQEMU::iso [file nativename [tk_getOpenFile -parent . \
+    -title "Select ISO Image" -filetypes $filetypes -multiple false]]
   if {$tQEMU::iso eq ""} {
-    set tQEMU::msg [list]
+    set tQEMU::msg ""
     return 1
   }
   $widget xview end
-  set tQEMU::msg [list $tQEMU::iso ready]
+  set tQEMU::msg "$tQEMU::iso ready"
 }
 
 proc selectQEMUImage {widget} {
@@ -57,13 +57,13 @@ proc selectQEMUImage {widget} {
     {{QCOW2} {.qcow2 .QCOW2}}
     {{RAW}   {.raw .RAW}}
   }
-  set tQEMU::img [tk_getOpenFile -title "Select QEMU Image File" -parent . \
-    -filetypes $filetypes -multiple false]
+  set tQEMU::img [file nativename [tk_getOpenFile -parent . \
+    -title "Select QEMU Image File" -filetypes $filetypes -multiple false]]
   if {$tQEMU::img eq ""} {
     set tQEMU::states [list]
-    set tQEMU::msg [list]
+    set tQEMU::msg ""
   } else {
-    set tQEMU::msg [list $tQEMU::img ready]
+    set tQEMU::msg "$tQEMU::img ready"
     set stateslist [exec -ignorestderr -- qemu-img snapshot -l $tQEMU::img]
     set tQEMU::states [lsearch -all -inline \
       -regexp $stateslist {vm-([[:digit:]]){14}\M}]
@@ -76,33 +76,36 @@ proc createQEMUImage {widget} {
     {{QCOW2} {.qcow2 .QCOW2}}
     {{RAW}   {.raw .RAW}}
   }
-  set filename [tk_getSaveFile -title "Create QEMU Image File" -parent . \
-    -filetypes $filetypes -defaultextension .qcow2]
+  set filename [file nativename [tk_getSaveFile -parent . \
+    -title "Create QEMU Image File" -filetypes $filetypes \
+    -defaultextension .qcow2]]
   if {$filename eq ""} {return 1}
   append imgsize $tQEMU::imgsize "G"
   exec -ignorestderr -- qemu-img create -f qcow2 $filename $imgsize
   set tQEMU::img $filename
   $widget xview end
   set tQEMU::states [list]
-  set tQEMU::msg [list $filename created Size:$imgsize Type:qcow2]
+  set tQEMU::msg "$filename created Size:$imgsize Type:qcow2"
 }
 
 proc selectSharedDir {widget} {
-  set tQEMU::dir [tk_chooseDirectory -title "Select Shared Directory" -parent . \
-    -mustexist true]
-  if {$tQEMU::dir eq ""} {return 1}
+  set tQEMU::dir [file nativename [tk_chooseDirectory -parent . \
+    -title "Select Shared Directory" -mustexist true]]
+  if {$tQEMU::dir eq ""} {
+    set tQEMU::msg ""
+    return 1
+  }
   $widget xview end
-  set tQEMU::msg [list $tQEMU::dir share enabled]
+  set tQEMU::msg "$tQEMU::dir share enabled"
 }
 
 proc selectBinary {widget} {
-  set executable [tk_getOpenFile -title "Select QEMU Executable File" -parent . \
-    -multiple false]
+  set executable [file nativename [tk_getOpenFile -parent . \
+    -title "Select QEMU Executable File" -multiple false]]
   if {$executable eq ""} {return 1}
-  if {[auto_execok [file nativename $executable]] eq ""} {
+  if {[auto_execok $executable] eq ""} {
     tk_messageBox -title "ERROR" -icon error -type ok -parent . \
-      -message "[file tail $executable]:" \
-      -detail "Not a valid executable file"
+      -message "[file tail $executable]:" -detail "Not a valid executable file"
     return 1
   }
   set tQEMU::bin $executable
@@ -114,20 +117,22 @@ proc loadState {loadvm} {
   set command [buildExecCmd]
   lappend command -loadvm $loadvm
   startQEMU $command
-  set tQEMU::msg [list QEMU is loading state $loadvm...]
+  set tQEMU::msg "QEMU is loading state $loadvm..."
 }
 
 proc deleteState {state} {
-  if {$state eq ""} {return 1}
+  if {$state eq ""} {
+    set tQEMU::msg ""
+    return 1
+  }
   exec -ignorestderr -- qemu-img snapshot -d $state $tQEMU::img &
   .lb_states delete active
-  set tQEMU::msg [list $state deleted]
+  set tQEMU::msg "$state deleted"
 }
 
 proc buildExecCmd {} {
-  set command [list [file nativename $tQEMU::bin] -name tQEMU \
-    -display $tQEMU::display -cpu $tQEMU::cpu -m $tQEMU::ram \
-    -vga $tQEMU::vga -soundhw $tQEMU::snd]
+  set command [list $tQEMU::bin -name tQEMU -display $tQEMU::display \
+    -cpu $tQEMU::cpu -m $tQEMU::ram -vga $tQEMU::vga -soundhw $tQEMU::snd]
   if {$tQEMU::kvm == 1} {
     lappend command -enable-kvm
   }
@@ -149,11 +154,11 @@ proc buildExecCmd {} {
   }
   if {$tQEMU::img ne ""} {
     lappend command -hda $tQEMU::img
-    set tQEMU::msg [list QEMU is starting $tQEMU::img...]
+    set tQEMU::msg "QEMU is starting $tQEMU::img..."
   }
   if {$tQEMU::iso ne ""} {
     lappend command -cdrom $tQEMU::iso -boot order=dc
-    set tQEMU::msg [list QEMU is starting $tQEMU::iso...]
+    set tQEMU::msg "QEMU is starting $tQEMU::iso..."
   }
   return $command
 }
@@ -381,13 +386,9 @@ proc createBindings {} {
   bind . <F6>        {.b_dir invoke}
   bind . <F7>        {.b_bin invoke}
   bind . <Control-d> {.menu.options invoke "Daemonize"}
-  bind . <Control-D> {.menu.options invoke "Daemonize"}
   bind . <Control-f> {.menu.options invoke "Fullscreen"}
-  bind . <Control-F> {.menu.options invoke "Fullscreen"}
   bind . <Control-c> {copyCommand}
-  bind . <Control-C> {copyCommand}
   bind . <Control-q> {exit}
-  bind . <Control-Q> {exit}
 
   foreach keysym [list <Return> <Double-ButtonRelease-1>] {
     bind .lb_states $keysym {loadState [.lb_states get active]}
@@ -415,8 +416,8 @@ if {$::argc > 0 && $::argc < 3} {
     if [file isfile $filename] {
       set filetype [file extension $filename]
       switch -- $filetype {
-        .iso   {set tQEMU::iso $filename}
-        .qcow2 {set tQEMU::img $filename}
+        .iso   {set tQEMU::iso [file nativename $filename]}
+        .qcow2 {set tQEMU::img [file nativename $filename]}
       }
     }
   }
