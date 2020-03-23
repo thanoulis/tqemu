@@ -403,7 +403,7 @@ wm protocol  . WM_DELETE_WINDOW {exit}
 #
 if {$::argc > 0 && $::argc < 3} {
   foreach filename $::argv {
-    if [file isfile $filename] {
+    if {[file isfile $filename]} {
       set filetype [string tolower [file extension $filename]]
       switch -- $filetype {
         .iso   {set tQEMU::iso [file nativename $filename]}
