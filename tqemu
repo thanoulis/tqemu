@@ -38,18 +38,29 @@ namespace eval tQEMU {
 ################################################################################
 # PROCEDURES
 #
+proc showMessage {msg} {
+  after cancel {set tQEMU::msg ""}
+  set tQEMU::msg $msg
+  after 5000 {set tQEMU::msg ""}
+}
+
+proc stateStartButton {} {
+  set state [expr {$tQEMU::iso eq "" && $tQEMU::img eq "" ? "disabled" : "normal"}]
+  .b_start configure -state $state
+  .menu.file entryconfigure "Start QEMU..." -state $state
+}
+
 proc selectISOImage {widget} {
   set filetypes {
     {{ISO Files} {.iso .ISO}}
   }
   set tQEMU::iso [file nativename [tk_getOpenFile -parent . \
     -title "Select ISO Image" -filetypes $filetypes -multiple false]]
-  if {$tQEMU::iso eq ""} {
-    set tQEMU::msg ""
-    return 2
+  if {$tQEMU::iso ne ""} {
+    $widget xview end
+    showMessage "$tQEMU::iso ready"
   }
-  $widget xview end
-  set tQEMU::msg "$tQEMU::iso ready"
+  stateStartButton
 }
 
 proc selectQEMUImage {widget} {
@@ -59,16 +70,16 @@ proc selectQEMUImage {widget} {
   }
   set tQEMU::img [file nativename [tk_getOpenFile -parent . \
     -title "Select QEMU Image File" -filetypes $filetypes -multiple false]]
-  if {$tQEMU::img eq ""} {
-    set tQEMU::states [list]
-    set tQEMU::msg ""
-  } else {
-    set tQEMU::msg "$tQEMU::img ready"
+  if {$tQEMU::img ne ""} {
     set stateslist [exec -ignorestderr -- qemu-img snapshot -l $tQEMU::img]
     set tQEMU::states [lsearch -all -inline \
       -regexp $stateslist {vm-([[:digit:]]){14}\M}]
+    showMessage "$tQEMU::img ready"
+    $widget xview end
+  } else {
+    set tQEMU::states [list]
   }
-  $widget xview end
+  stateStartButton
 }
 
 proc createQEMUImage {widget} {
@@ -85,18 +96,18 @@ proc createQEMUImage {widget} {
   set tQEMU::img $filename
   $widget xview end
   set tQEMU::states [list]
-  set tQEMU::msg "$filename created Size:$imgsize Type:qcow2"
+  showMessage "$filename created Size:$imgsize Type:qcow2"
 }
 
 proc selectSharedDir {widget} {
   set tQEMU::dir [file nativename [tk_chooseDirectory -parent . \
     -title "Select Shared Directory" -mustexist true]]
   if {$tQEMU::dir eq ""} {
-    set tQEMU::msg "share disabled"
+    showMessage "share disabled"
     return 2
   }
   $widget xview end
-  set tQEMU::msg "$tQEMU::dir share enabled"
+  showMessage "$tQEMU::dir share enabled"
 }
 
 proc selectBinary {widget} {
@@ -117,17 +128,14 @@ proc loadState {loadvm} {
   set command [buildExecCmd]
   lappend command -loadvm $loadvm
   startQEMU $command
-  set tQEMU::msg "QEMU is loading state $loadvm..."
+  showMessage "QEMU is loading state $loadvm..."
 }
 
 proc deleteState {state} {
-  if {$state eq ""} {
-    set tQEMU::msg ""
-    return 1
-  }
+  if {$state eq ""} {return 1}
   exec -ignorestderr -- qemu-img snapshot -d $state $tQEMU::img &
   .lb_states delete active
-  set tQEMU::msg "$state deleted"
+  showMessage "$state deleted"
 }
 
 proc buildExecCmd {} {
@@ -154,11 +162,11 @@ proc buildExecCmd {} {
   }
   if {$tQEMU::img ne ""} {
     lappend command -hda $tQEMU::img
-    set tQEMU::msg "QEMU is starting $tQEMU::img..."
+    showMessage "QEMU is starting $tQEMU::img..."
   }
   if {$tQEMU::iso ne ""} {
     lappend command -cdrom $tQEMU::iso -boot order=dc
-    set tQEMU::msg "QEMU is starting $tQEMU::iso..."
+    showMessage "QEMU is starting $tQEMU::iso..."
   }
   return $command
 }
@@ -176,7 +184,7 @@ proc showCommand {} {
 proc copyCommand {} {
   set command [buildExecCmd]
   clipboard append -type STRING -- $command
-  set tQEMU::msg "Command copied to clipboard"
+  showMessage "Command copied to clipboard"
 }
 
 proc helpAbout {} {
@@ -209,7 +217,7 @@ proc createMenus {} {
   . configure -menu [menu .menu]
   .menu add cascade -label "File" -underline 0 -menu [menu .menu.file]
     .menu.file add command -label "Start QEMU..." -underline 1 \
-      -accelerator "F5" -command {startQEMU [buildExecCmd]}
+      -accelerator "F5" -command {startQEMU [buildExecCmd]} -state disabled
     .menu.file add separator
     .menu.file add command -label "Select ISO Image..." -underline 8 \
       -accelerator "F2" -command {selectISOImage .e_iso}
@@ -303,9 +311,9 @@ proc createWidgets {} {
   ttk::labelframe .lf_cmd -text "\u2022 Action:" -style flat.TLabelframe
     ttk::button .b_about -takefocus 0 -text "About..." -underline 0 \
       -command {.menu.help invoke "About tQEMU..."}
-    ttk::button .b_start -takefocus 0 -text "Start"    -underline 0 \
-      -command {.menu.file invoke "Start QEMU..."}
-    ttk::button .b_exit  -takefocus 0 -text "Exit"     -underline 1 \
+    ttk::button .b_start -takefocus 0 -text "Start" -underline 0 \
+      -command {.menu.file invoke "Start QEMU..."} -state disabled
+    ttk::button .b_exit  -takefocus 0 -text "Exit" -underline 1 \
       -command {.menu.file invoke "Exit"}
     grid .b_about -in .lf_cmd -row 0 -column 0 -sticky w
     grid .b_start -in .lf_cmd -row 0 -column 1
@@ -375,10 +383,10 @@ proc createBindings {} {
   bind all <Control-f> {.menu.options invoke "Fullscreen"}
   bind all <Control-c> {copyCommand}
 
-  bind .e_iso <ButtonRelease-1> {.menu.file invoke "Select ISO Image..."}
-  bind .e_dir <ButtonRelease-1> {.menu.file invoke "Shared Directory..."}
-  bind .e_bin <ButtonRelease-1> {.menu.file invoke "QEMU Executable..."}
-  bind .e_img <ButtonRelease-1> {.menu.file invoke "Select QEMU Image..."}
+  bind .e_iso <ButtonRelease-3> {.menu.file invoke "Select ISO Image..."}
+  bind .e_dir <ButtonRelease-3> {.menu.file invoke "Shared Directory..."}
+  bind .e_bin <ButtonRelease-3> {.menu.file invoke "QEMU Executable..."}
+  bind .e_img <ButtonRelease-3> {.menu.file invoke "Select QEMU Image..."}
 
   foreach keysym {<Return> <Double-ButtonRelease-1>} {
     bind .lb_states $keysym {loadState [.lb_states get active]}
