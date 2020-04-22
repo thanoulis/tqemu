@@ -14,7 +14,7 @@ namespace eval tQEMU {
     Opteron_G4 Opteron_G5 Penryn SandyBridge Snowridge Westmere]
   variable ram     1024
   variable ramlist [list 128 254 512 1024 2048 4096]
-  variable vga     {std}
+  variable vga     {virtio}
   variable vgalist [list none std cirrus vmware xenfb qxl virtio]
   variable snd     {hda}
   variable sndlist [list sb16 es1370 ac97 adlib gus cs4231a hda pcspk all]
@@ -171,8 +171,8 @@ proc buildExecCmd {} {
   return $command
 }
 
-proc startQEMU {cmd} {
-  exec -ignorestderr -- {*}$cmd
+proc startQEMU {command} {
+  exec -ignorestderr -- {*}$command
 }
 
 proc showCommand {} {
