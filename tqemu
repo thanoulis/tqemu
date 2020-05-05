@@ -29,6 +29,7 @@ namespace eval tQEMU {
   variable imgsize 20
   variable msg     [list]
   variable kvm     1
+  variable hyperv  0
   variable daemon  1
   variable fscreen 0
   variable display {gtk}
@@ -48,6 +49,14 @@ proc stateStartButton {} {
   set state [expr {$tQEMU::iso eq "" && $tQEMU::img eq "" ? "disabled" : "normal"}]
   .b_start configure -state $state
   .menu.file entryconfigure "Start QEMU..." -state $state
+}
+
+proc enableHyperV {} {
+  if {$tQEMU::hyperv == 1} {
+    append tQEMU::cpu ",hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_time"
+  } else {
+    set tQEMU::cpu [lindex [split $tQEMU::cpu ","] 0]
+  }
 }
 
 proc selectISOImage {widget} {
@@ -235,10 +244,13 @@ proc createMenus {} {
     .menu.file add command -label "Exit" -underline 1 \
       -accelerator "Ctrl+Q" -command {exit}
   .menu add cascade -label "Options" -underline 0 -menu [menu .menu.options]
-    .menu.options add checkbutton -label "Enable KVM" -underline 7 \
-      -variable tQEMU::kvm
     .menu.options add checkbutton -label "Daemonize" -underline 7 \
       -accelerator "Ctrl+D" -variable tQEMU::daemon
+    .menu.options add separator
+    .menu.options add checkbutton -label "Enable KVM" -underline 7 \
+      -variable tQEMU::kvm
+    .menu.options add checkbutton -label "Enable Hyper-V" -underline 7 \
+      -variable tQEMU::hyperv -command {enableHyperV}
     .menu.options add separator
     .menu.options add cascade -label "Display" -underline 0 -menu [menu .menu.options.display]
       foreach display [list sdl gtk spice-app] {
@@ -382,6 +394,8 @@ proc createBindings {} {
   bind all <Control-d> {.menu.options invoke "Daemonize"}
   bind all <Control-f> {.menu.options invoke "Fullscreen"}
   bind all <Control-c> {copyCommand}
+
+  bind .cb_cpu <<ComboboxSelected>> {enableHyperV}
 
   bind .e_iso <ButtonRelease-3> {.menu.file invoke "Select ISO Image..."}
   bind .e_dir <ButtonRelease-3> {.menu.file invoke "Shared Directory..."}
