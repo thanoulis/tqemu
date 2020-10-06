@@ -16,8 +16,9 @@ namespace eval tQEMU {
   variable ramlist [list 128 254 512 1024 2048 4096]
   variable vga     {virtio}
   variable vgalist [list none std cirrus vmware xenfb qxl virtio]
-  variable snd     {hda}
-  variable sndlist [list sb16 es1370 ac97 adlib gus cs4231a hda pcspk all]
+  variable snd     {intel-hda}
+  variable sndlist [list ac97 adlib cs4231a es1370 gus ich9-intel-hda \
+    intel-hda sb16 none]
   variable nic     {e1000}
   variable niclist [list e1000 e1000-82544gc e1000-82545em e1000e i82550 \
     i82551 i82557a i82557b i82557c i82558a i82558b i82559a i82559b i82559c \
@@ -149,7 +150,7 @@ proc deleteState {state} {
 
 proc buildExecCmd {} {
   set command [list $tQEMU::bin -name tQEMU -display $tQEMU::display \
-    -cpu $tQEMU::cpu -m $tQEMU::ram -vga $tQEMU::vga -soundhw $tQEMU::snd]
+    -cpu $tQEMU::cpu -m $tQEMU::ram -vga $tQEMU::vga]
   if {$tQEMU::kvm == 1} {
     lappend command -enable-kvm
   }
@@ -158,6 +159,15 @@ proc buildExecCmd {} {
   }
   if {$tQEMU::fscreen == 1} {
     lappend command -full-screen
+  }
+  switch -glob -- $tQEMU::snd {
+    "none" {}
+    "*intel-hda" {
+      lappend command -device $tQEMU::snd -device hda-duplex
+    }
+    default {
+      lappend command -device $tQEMU::snd
+    }
   }
   if {$tQEMU::nic eq "none"} {
     lappend command -nic none
