@@ -14,8 +14,10 @@ namespace eval tQEMU {
     Opteron_G4 Opteron_G5 Penryn SandyBridge Snowridge Westmere]
   variable ram     1024
   variable ramlist [list 128 254 512 1024 2048 4096]
-  variable vga     {virtio}
-  variable vgalist [list none std cirrus vmware xenfb qxl virtio]
+  variable vga     {virtio-vga}
+  variable vgalist [list ati-vga bochs-display cirrus-vga isa-vga qxl-vga \
+    ramfb sga VGA virtio-gpu virtio-vga vmware-svga]
+  variable audio   {pa}
   variable snd     {intel-hda}
   variable sndlist [list ac97 adlib cs4231a es1370 gus ich9-intel-hda \
     intel-hda sb16 none]
@@ -150,7 +152,7 @@ proc deleteState {state} {
 
 proc buildExecCmd {} {
   set command [list $tQEMU::bin -name tQEMU -display $tQEMU::display \
-    -cpu $tQEMU::cpu -m $tQEMU::ram -vga $tQEMU::vga]
+    -cpu $tQEMU::cpu -m $tQEMU::ram -device $tQEMU::vga]
   if {$tQEMU::kvm == 1} {
     lappend command -enable-kvm
   }
@@ -163,20 +165,22 @@ proc buildExecCmd {} {
   switch -glob -- $tQEMU::snd {
     "none" {}
     "*intel-hda" {
-      lappend command -device $tQEMU::snd -device hda-duplex
+      lappend command -audiodev $tQEMU::audio,id=QEMUAudio \
+        -device $tQEMU::snd -device hda-duplex,audiodev=QEMUAudio
     }
     default {
-      lappend command -device $tQEMU::snd
+      lappend command -audiodev $tQEMU::audio,id=QEMUAudio \
+        -device $tQEMU::snd,audiodev=QEMUAudio
     }
   }
   if {$tQEMU::nic eq "none"} {
     lappend command -nic none
   } else {
-    lappend command -device $tQEMU::nic,netdev=vnet0
+    lappend command -device $tQEMU::nic,netdev=QEMUNet
     if {$tQEMU::dir eq ""} {
-      lappend command -netdev user,id=vnet0
+      lappend command -netdev user,id=QEMUNet
     } else {
-      lappend command -netdev user,id=vnet0,smb=$tQEMU::dir
+      lappend command -netdev user,id=QEMUNet,smb=$tQEMU::dir
     }
   }
   if {$tQEMU::img ne ""} {
@@ -256,20 +260,24 @@ proc createMenus {} {
   .menu add cascade -label "Options" -underline 0 -menu [menu .menu.options]
     .menu.options add checkbutton -label "Daemonize" -underline 7 \
       -accelerator "Ctrl+D" -variable tQEMU::daemon
+    .menu.options add checkbutton -label "Fullscreen" -underline 0 \
+      -accelerator "Ctrl+F" -variable tQEMU::fscreen
     .menu.options add separator
     .menu.options add checkbutton -label "Enable KVM" -underline 7 \
       -variable tQEMU::kvm
     .menu.options add checkbutton -label "Enable Hyper-V" -underline 7 \
       -variable tQEMU::hyperv -command {enableHyperV}
     .menu.options add separator
+    .menu.options add cascade -label "Audio" -underline 0 -menu [menu .menu.options.audio]
+      foreach audio [list alsa coreaudio dsound oss pa sdl spice wav none] {
+        .menu.options.audio add radiobutton -label $audio \
+          -variable tQEMU::audio -value $audio
+      }
     .menu.options add cascade -label "Display" -underline 0 -menu [menu .menu.options.display]
       foreach display [list sdl gtk curses spice-app egl-headless none] {
       .menu.options.display add radiobutton -label $display \
         -variable tQEMU::display -value $display
       }
-    .menu.options add separator
-    .menu.options add checkbutton -label "Fullscreen" -underline 0 \
-      -accelerator "Ctrl+F" -variable tQEMU::fscreen
     .menu.options add separator
     .menu.options add cascade -label "Themes" -underline 0 -menu [menu .menu.options.themes]
       foreach theme [ttk::style theme names] {
