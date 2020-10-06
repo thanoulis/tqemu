@@ -253,7 +253,7 @@ proc createMenus {} {
       -variable tQEMU::hyperv -command {enableHyperV}
     .menu.options add separator
     .menu.options add cascade -label "Display" -underline 0 -menu [menu .menu.options.display]
-      foreach display [list sdl gtk spice-app] {
+      foreach display [list sdl gtk curses spice-app egl-headless none] {
       .menu.options.display add radiobutton -label $display \
         -variable tQEMU::display -value $display
       }
