@@ -7,6 +7,7 @@ package require Tk
 #
 namespace eval tQEMU {
   variable bin     [append bin "qemu-system-" $::tcl_platform(machine)]
+  variable machine {q35}
   variable cpu     {host}
   variable cpulist [list host max base qemu32 qemu64 kvm32 kvm64 486 pentium \
     pentium2 pentium3 coreduo core2duo n270 Broadwell Conroe Deverton Dhyana \
@@ -153,7 +154,8 @@ proc deleteState {state} {
 
 proc buildExecCmd {} {
   set command [list $tQEMU::bin -name tQEMU -display $tQEMU::display \
-    -cpu $tQEMU::cpu -m $tQEMU::ram -device $tQEMU::vga]
+    -machine $tQEMU::machine -cpu $tQEMU::cpu -m $tQEMU::ram \
+    -device $tQEMU::vga]
   if {$tQEMU::kvm == 1} {
     lappend command -enable-kvm
   }
@@ -278,6 +280,11 @@ proc createMenus {} {
       foreach display [list sdl gtk curses spice-app egl-headless none] {
       .menu.options.display add radiobutton -label $display \
         -variable tQEMU::display -value $display
+      }
+    .menu.options add cascade -label "Machine" -underline 0 -menu [menu .menu.options.machine]
+      foreach machine [list microvm pc q35 isapc none] {
+        .menu.options.machine add radiobutton -label $machine \
+          -variable tQEMU::machine -value $machine
       }
     .menu.options add separator
     .menu.options add cascade -label "Themes" -underline 0 -menu [menu .menu.options.themes]
