@@ -8,12 +8,13 @@ package require Tk
 namespace eval tQEMU {
   variable bin     [append bin "qemu-system-" $::tcl_platform(machine)]
   variable machine {q35}
+  variable accel   {kvm}
   variable cpu     {host}
   variable cpulist [list host max base qemu32 qemu64 kvm32 kvm64 486 pentium \
     pentium2 pentium3 coreduo core2duo n270 Broadwell Conroe Deverton Dhyana \
     EPYC Haswell IvyBridge KnightMill Nehalem Opteron_G1 Opteron_G2 Opteron_G3 \
     Opteron_G4 Opteron_G5 Penryn SandyBridge Snowridge Westmere]
-  variable ram     1024
+  variable ram     {1G}
   variable ramlist [list 128M 254M 512M 1G 2G 4G]
   variable vga     {virtio-vga}
   variable vgalist [list ati-vga bochs-display cirrus-vga isa-vga qxl-vga \
@@ -33,7 +34,6 @@ namespace eval tQEMU {
   variable states  [list]
   variable imgsize 20
   variable msg     [list]
-  variable kvm     1
   variable hyperv  0
   variable daemon  1
   variable fscreen 0
@@ -154,11 +154,8 @@ proc deleteState {state} {
 
 proc buildExecCmd {} {
   set command [list $tQEMU::bin -name tQEMU -display $tQEMU::display \
-    -machine $tQEMU::machine -cpu $tQEMU::cpu -m $tQEMU::ram \
-    -device $tQEMU::vga]
-  if {$tQEMU::kvm == 1} {
-    lappend command -enable-kvm
-  }
+    -machine $tQEMU::machine -accel $tQEMU::accel \
+    -cpu $tQEMU::cpu -m $tQEMU::ram -device $tQEMU::vga]
   if {$tQEMU::daemon == 1} {
     lappend command -daemonize
   }
@@ -266,8 +263,6 @@ proc createMenus {} {
     .menu.options add checkbutton -label "Fullscreen" -underline 0 \
       -accelerator "Ctrl+F" -variable tQEMU::fscreen
     .menu.options add separator
-    .menu.options add checkbutton -label "Enable KVM" -underline 7 \
-      -variable tQEMU::kvm
     .menu.options add checkbutton -label "Enable Hyper-V" -underline 7 \
       -variable tQEMU::hyperv -command {enableHyperV}
     .menu.options add separator
@@ -285,6 +280,11 @@ proc createMenus {} {
       foreach machine [list microvm pc q35 isapc none] {
         .menu.options.machine add radiobutton -label $machine \
           -variable tQEMU::machine -value $machine
+      }
+    .menu.options add cascade -label "Acceleration" -underline 0 -menu [menu .menu.options.accel]
+      foreach accel [list kvm xen hax hvf whpx tcg] {
+        .menu.options.accel add radiobutton -label $accel \
+          -variable tQEMU::accel -value $accel
       }
     .menu.options add separator
     .menu.options add cascade -label "Themes" -underline 0 -menu [menu .menu.options.themes]
