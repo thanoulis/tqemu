@@ -206,6 +206,7 @@ proc showCommand {} {
 
 proc copyCommand {} {
   set command [buildExecCmd]
+  clipboard clear
   clipboard append -type STRING -- $command
   showMessage "Command copied to clipboard"
 }
