@@ -6,39 +6,49 @@ package require Tk
 # VARIABLES
 #
 namespace eval tQEMU {
-  variable bin     [append bin "qemu-system-" $::tcl_platform(machine)]
-  variable machine {q35}
-  variable accel   {kvm}
-  variable cpu     {host}
-  variable cpulist [list host max base qemu32 qemu64 kvm32 kvm64 486 pentium \
+  variable bin          [append bin "qemu-system-" $::tcl_platform(machine)]
+  variable machine      {q35}
+  variable machinelist  [list microvm pc q35 isapc none]
+  variable accel        {kvm}
+  variable accellist    [list kvm xen hax hvf whpx tcg]
+  variable cpu          {host}
+  variable cpulist      [list host max base qemu32 qemu64 kvm32 kvm64 486 pentium \
     pentium2 pentium3 coreduo core2duo n270 Broadwell Conroe Deverton Dhyana \
     EPYC Haswell IvyBridge KnightMill Nehalem Opteron_G1 Opteron_G2 Opteron_G3 \
     Opteron_G4 Opteron_G5 Penryn SandyBridge Snowridge Westmere]
-  variable ram     {1G}
-  variable ramlist [list 128M 254M 512M 1G 2G 4G]
-  variable vga     {virtio-vga}
-  variable vgalist [list ati-vga bochs-display cirrus-vga isa-vga qxl-vga \
+  variable storage      {virtio-blk}
+  variable storagelist  [list ahci ide-hd isa-ide lsi nvme scsi-hd virtio-9p virtio-blk virtio-scsi]
+  variable ram          {2G}
+  variable ramlist      [list 128M 254M 512M 1G 2G 4G]
+  variable display      {gtk}
+  variable displaylist  [list sdl gtk curses spice-app egl-headless vnc=:0 vnc=:1 none]
+  variable vga          {virtio-vga}
+  variable vgalist      [list ati-vga bochs-display cirrus-vga isa-vga qxl-vga \
     ramfb sga VGA virtio-gpu virtio-vga vmware-svga]
-  variable audio   {pa}
-  variable snd     {intel-hda}
-  variable sndlist [list ac97 adlib cs4231a es1370 gus ich9-intel-hda \
+  variable audio        {pa}
+  variable audiolist    [list alsa coreaudio dsound oss pa sdl spice wav none]
+  variable snd          {intel-hda}
+  variable sndlist      [list ac97 adlib cs4231a es1370 gus ich9-intel-hda \
     intel-hda sb16 none]
-  variable nic     {e1000}
-  variable niclist [list e1000 e1000-82544gc e1000-82545em e1000e i82550 \
+  variable nic          {virtio-net}
+  variable niclist      [list e1000 e1000-82544gc e1000-82545em e1000e i82550 \
     i82551 i82557a i82557b i82557c i82558a i82558b i82559a i82559b i82559c \
     i82559er i82562 i82801 ne2k_isa ne2k_pci pcnet rocker rtl8139 tulip \
     usb-net virtio-net vmxnet3 none]
-  variable iso     {}
-  variable dir     {}
-  variable img     {}
-  variable states  [list]
-  variable imgsize 20
-  variable msg     [list]
-  variable hyperv  0
-  variable daemon  1
-  variable fscreen 0
-  variable display {gtk}
-  variable theme   [ttk::style theme use]
+  variable menu         {off}
+  variable strict       {off}
+  variable iso          {}
+  variable dir          {}
+  variable img          {}
+  variable imgsize      20
+  variable states       [list]
+  variable msg          [list]
+  variable hyperv       0
+  variable snapshot     {}
+  variable fscreen      0
+  variable daemon       1
+  variable pause        0
+  variable theme        [ttk::style theme use]
 }
 
 ################################################################################
@@ -153,42 +163,49 @@ proc deleteState {state} {
 }
 
 proc buildExecCmd {} {
-  set command [list $tQEMU::bin -name tQEMU -display $tQEMU::display \
-    -machine $tQEMU::machine -accel $tQEMU::accel \
-    -cpu $tQEMU::cpu -m $tQEMU::ram -device $tQEMU::vga]
+  set command [list $tQEMU::bin --name tQEMU --display $tQEMU::display \
+    --machine $tQEMU::machine --accel $tQEMU::accel \
+    --boot order=dc,menu=$tQEMU::menu,strict=$tQEMU::strict \
+    --cpu $tQEMU::cpu --m $tQEMU::ram --device $tQEMU::vga]
+  if {$tQEMU::snapshot == 1} {
+    lappend command --snapsnot
+  }
+  if {$tQEMU::pause == 1} {
+    lappend command --S
+  }
   if {$tQEMU::daemon == 1} {
-    lappend command -daemonize
+    lappend command --daemonize
   }
   if {$tQEMU::fscreen == 1} {
-    lappend command -full-screen
+    lappend command --full-screen
   }
   switch -glob -- $tQEMU::snd {
     "none" {}
     "*intel-hda" {
-      lappend command -audiodev $tQEMU::audio,id=QEMUAudio \
-        -device $tQEMU::snd -device hda-duplex,audiodev=QEMUAudio
+      lappend command --audiodev $tQEMU::audio,id=QEMUAudio \
+        --device $tQEMU::snd --device hda-duplex,audiodev=QEMUAudio
     }
     default {
-      lappend command -audiodev $tQEMU::audio,id=QEMUAudio \
-        -device $tQEMU::snd,audiodev=QEMUAudio
+      lappend command --audiodev $tQEMU::audio,id=QEMUAudio \
+        --device $tQEMU::snd,audiodev=QEMUAudio
     }
   }
   if {$tQEMU::nic eq "none"} {
-    lappend command -nic none
+    lappend command --nic none
   } else {
-    lappend command -device $tQEMU::nic,netdev=QEMUNet
+    lappend command --device $tQEMU::nic,netdev=QEMUNet
     if {$tQEMU::dir eq ""} {
-      lappend command -netdev user,id=QEMUNet
+      lappend command --netdev user,id=QEMUNet
     } else {
-      lappend command -netdev user,id=QEMUNet,smb=$tQEMU::dir
+      lappend command --netdev user,id=QEMUNet,smb=$tQEMU::dir
     }
   }
   if {$tQEMU::img ne ""} {
-    lappend command -hda $tQEMU::img
+    lappend command --blockdev qcow2,node-name=QEMUDisk0,file.driver=file,file.filename=$tQEMU::img --device $tQEMU::storage,drive=QEMUDisk0
     showMessage "QEMU is starting $tQEMU::img..."
   }
   if {$tQEMU::iso ne ""} {
-    lappend command -cdrom $tQEMU::iso -boot order=dc
+    lappend command --cdrom $tQEMU::iso
     showMessage "QEMU is starting $tQEMU::iso..."
   }
   return $command
@@ -259,31 +276,45 @@ proc createMenus {} {
     .menu.file add command -label "Exit" -underline 1 \
       -accelerator "Ctrl+Q" -command {exit}
   .menu add cascade -label "Options" -underline 0 -menu [menu .menu.options]
-    .menu.options add checkbutton -label "Daemonize" -underline 7 \
-      -accelerator "Ctrl+D" -variable tQEMU::daemon
+    .menu.options add checkbutton -label "Snapshot" -underline 0 \
+      -accelerator "Ctrl+S" -variable tQEMU::snapshot
     .menu.options add checkbutton -label "Fullscreen" -underline 0 \
       -accelerator "Ctrl+F" -variable tQEMU::fscreen
+    .menu.options add checkbutton -label "Daemonize" -underline 7 \
+      -accelerator "Ctrl+Z" -variable tQEMU::daemon
+    .menu.options add checkbutton -label "Start Paused" -underline 6 \
+      -accelerator "Ctrl+P" -variable tQEMU::pause
     .menu.options add separator
-    .menu.options add checkbutton -label "Enable Hyper-V" -underline 7 \
+    .menu.options add checkbutton -label "Hyper-V" -underline 0 \
       -variable tQEMU::hyperv -command {enableHyperV}
     .menu.options add separator
+    .menu.options add cascade -label "Boot" -underline 0 -menu [menu .menu.options.boot]
+      .menu.options.boot add checkbutton -label "Boot Menu" -underline 0 \
+        -variable tQEMU::menu -onvalue "on" -offvalue "off"
+      .menu.options.boot add checkbutton -label "Strict Boot" -underline 0 \
+      -variable tQEMU::strict -onvalue "on" -offvalue "off"
     .menu.options add cascade -label "Audio" -underline 0 -menu [menu .menu.options.audio]
-      foreach audio [list alsa coreaudio dsound oss pa sdl spice wav none] {
+      foreach audio $tQEMU::audiolist {
         .menu.options.audio add radiobutton -label $audio \
           -variable tQEMU::audio -value $audio
       }
     .menu.options add cascade -label "Display" -underline 0 -menu [menu .menu.options.display]
-      foreach display [list sdl gtk curses spice-app egl-headless none] {
+      foreach display $tQEMU::displaylist {
       .menu.options.display add radiobutton -label $display \
         -variable tQEMU::display -value $display
       }
+    .menu.options add cascade -label "Storage" -underline 0 -menu [menu .menu.options.storage]
+      foreach storage $tQEMU::storagelist {
+        .menu.options.storage add radiobutton -label $storage \
+          -variable tQEMU::storage -value $storage
+      }
     .menu.options add cascade -label "Machine" -underline 0 -menu [menu .menu.options.machine]
-      foreach machine [list microvm pc q35 isapc none] {
+      foreach machine $tQEMU::machinelist {
         .menu.options.machine add radiobutton -label $machine \
           -variable tQEMU::machine -value $machine
       }
     .menu.options add cascade -label "Acceleration" -underline 0 -menu [menu .menu.options.accel]
-      foreach accel [list kvm xen hax hvf whpx tcg] {
+      foreach accel $tQEMU::accellist {
         .menu.options.accel add radiobutton -label $accel \
           -variable tQEMU::accel -value $accel
       }
@@ -293,11 +324,11 @@ proc createMenus {} {
         .menu.options.themes add radiobutton -label $theme -variable tQEMU::theme \
           -value $theme -command [list ttk::style theme use $theme]
       }
-    .menu.options add separator
-    .menu.options add command -label "Show Command..." -underline 0 -command {showCommand}
-    .menu.options add command -label "Copy Command" -underline 0 \
-      -accelerator "Ctrl+C" -command {copyCommand}
   .menu add cascade -label "Help" -underline 0 -menu [menu .menu.help]
+    .menu.help add command -label "Copy Command" -underline 0 \
+      -accelerator "Ctrl+C" -command {copyCommand}
+    .menu.help add command -label "Show Command..." -underline 0 -command {showCommand}
+    .menu.help add separator
     .menu.help add command -label "About tQEMU..." -underline 0 \
       -accelerator "F1" -command {helpAbout}
     .menu.help add command -label "About QEMU..." -underline 6 \
@@ -418,8 +449,10 @@ proc createBindings {} {
   bind all <F6>        {.menu.file invoke "Shared Directory..."}
   bind all <F7>        {.menu.file invoke "QEMU Executable..."}
   bind all <Control-q> {.menu.file invoke "Exit"}
-  bind all <Control-d> {.menu.options invoke "Daemonize"}
+  bind all <Control-s> {.menu.options invoke "Snapshot"}
   bind all <Control-f> {.menu.options invoke "Fullscreen"}
+  bind all <Control-z> {.menu.options invoke "Daemonize"}
+  bind all <Control-p> {.menu.options invoke "Start Paused"}
   bind all <Control-c> {copyCommand}
 
   bind .cb_cpu <<ComboboxSelected>> {enableHyperV}
