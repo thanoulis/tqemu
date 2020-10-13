@@ -7,6 +7,10 @@ package require Tk
 #
 namespace eval tQEMU {
   variable bin          [append bin "qemu-system-" $::tcl_platform(machine)]
+  variable rtcbase      {utc}
+  variable rtcbaselist  [list utc localtime]
+  variable rtcclock     {host}
+  variable rtcclocklist [list host rt vm]
   variable machine      {q35}
   variable machinelist  [list microvm pc q35 isapc none]
   variable accel        {kvm}
@@ -164,6 +168,7 @@ proc deleteState {state} {
 
 proc buildExecCmd {} {
   set command [list $tQEMU::bin --name tQEMU --display $tQEMU::display \
+    --rtc base=$tQEMU::rtcbase,clock=$tQEMU::rtcclock \
     --machine $tQEMU::machine --accel $tQEMU::accel \
     --boot order=dc,menu=$tQEMU::menu,strict=$tQEMU::strict \
     --cpu $tQEMU::cpu --m $tQEMU::ram --device $tQEMU::vga]
@@ -318,6 +323,17 @@ proc createMenus {} {
         .menu.options.accel add radiobutton -label $accel \
           -variable tQEMU::accel -value $accel
       }
+    .menu.options add cascade -label "Real Time Clock" -underline 10 -menu [menu .menu.options.rtc]
+        .menu.options.rtc add cascade -label "Base" -underline 0 -menu [menu .menu.options.rtcbase]
+        foreach rtcbase $tQEMU::rtcbaselist {
+          .menu.options.rtcbase add radiobutton -label $rtcbase \
+            -variable tQEMU::rtcbase -value $rtcbase
+        }
+        .menu.options.rtc add cascade -label "Clock" -underline 0 -menu [menu .menu.options.rtcclock]
+        foreach rtcclock $tQEMU::rtcclocklist {
+          .menu.options.rtcclock add radiobutton -label $rtcclock \
+            -variable tQEMU::rtcclock -value $rtcclock
+        }
     .menu.options add separator
     .menu.options add cascade -label "Themes" -underline 0 -menu [menu .menu.options.themes]
       foreach theme [ttk::style theme names] {
