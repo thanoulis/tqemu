@@ -82,20 +82,20 @@ proc enableHyperV {} {
   }
 }
 
-proc selectISOImage {widget} {
+proc selectISOImage {entry} {
   set filetypes {
     {{ISO Files} {.iso .ISO}}
   }
   set tQEMU::cdrom [file nativename [tk_getOpenFile -parent . \
     -title "Select CD-ROM Image" -filetypes $filetypes -multiple false]]
   if {$tQEMU::cdrom ne ""} {
-    $widget xview end
+    $entry xview end
     showMessage "$tQEMU::cdrom ready"
   }
   stateStartButton
 }
 
-proc selectQEMUImages {widget} {
+proc selectQEMUImages {tree} {
   set filetypes {
     {{QCOW2}     {.qcow2 .QCOW2}}
     {{All Files} {*}}
@@ -105,20 +105,31 @@ proc selectQEMUImages {widget} {
   if {$filelist eq ""} {return 1}
   foreach file $filelist {
     if {$file ni $tQEMU::filelist} {
-      set node [$widget insert {} end -text $file]
+      set node [$tree insert {} end -text $file]
+      $tree tag add File $node
       set statelist [exec -ignorestderr -- qemu-img snapshot -l $file]
       set statelist [lsearch -all -inline \
         -regexp $statelist {vm-([[:digit:]]){14}\M}]
       if {$statelist ne ""} {
         foreach state $statelist {
-          $widget insert $node end -text $state
+          set childnode [$tree insert $node end -text $state]
+          $tree tag add State $childnode
         }
       }
       lappend tQEMU::filelist $file
+      $tree see $node
+      $tree selection set $node
+      showMessage "$file ready"
+    } else {
+      foreach node [$tree children {}] {
+        if {[$tree item $node -text] eq $file} {
+          $tree see $node
+          $tree selection set $node
+          showMessage "$file already exists"
+        }
+      }
     }
   }
-  $widget tag add Parent [$widget children {}]
-  showMessage "$file ready"
   stateStartButton
 }
 
@@ -136,18 +147,18 @@ proc createQEMUImage {} {
   showMessage "$filename created Size:$imgsize Type:qcow2"
 }
 
-proc selectSharedDir {widget} {
+proc selectSharedDir {entry} {
   set tQEMU::smb [file nativename [tk_chooseDirectory -parent . \
     -title "Select Shared Directory" -mustexist true]]
   if {$tQEMU::smb eq ""} {
     showMessage "share disabled"
     return 2
   }
-  $widget xview end
+  $entry xview end
   showMessage "$tQEMU::smb share enabled"
 }
 
-proc selectBinary {widget} {
+proc selectBinary {entry} {
   set executable [file nativename [tk_getOpenFile -parent . \
     -title "Select QEMU Executable File" -multiple false]]
   if {$executable eq ""} {return 2}
@@ -157,12 +168,10 @@ proc selectBinary {widget} {
     return 1
   }
   set tQEMU::bin $executable
-  $widget xview end
+  $entry xview end
 }
 
 proc loadState {node tree} {
-  if {$node eq ""} {return 1}
-  if {[$tree parent $node] eq ""} {return 2}
   set filename [$tree item [$tree parent $node] -text]
   set loadvm [$tree item $node -text]
   set command [buildExecCmd "loadvm"]
@@ -172,21 +181,22 @@ proc loadState {node tree} {
   showMessage "QEMU is loading state $loadvm..."
 }
 
+proc removeFile {node tree} {
+  set file [$tree item $node -text]
+  set index [lsearch $tQEMU::filelist [$tree item $node -text]]
+  $tree tag remove File $node
+  $tree delete $node
+  set tQEMU::filelist [lreplace $tQEMU::filelist $index $index]
+  showMessage "$file removed"
+}
+
 proc deleteState {node tree} {
-  if {$node eq ""} {return 1}
-  if {[$tree parent $node] ne ""} {
-    set state [$tree item $node -text]
-    set file [$tree item [$tree parent $node] -text]
-    exec -ignorestderr -- qemu-img snapshot -d $state $file &
-    $tree delete $node
-    showMessage "$state deleted"
-  } else {
-    set file [$tree item $node -text]
-    set index [lsearch $tQEMU::filelist [$tree item $node -text]]
-    $tree delete $node
-    set tQEMU::filelist [lreplace $tQEMU::filelist $index $index]
-    showMessage "$file removed"
-  }
+  set state [$tree item $node -text]
+  set file [$tree item [$tree parent $node] -text]
+  $tree tag remove State $node
+  $tree delete $node
+  exec -ignorestderr -- qemu-img snapshot -d $state $file &
+  showMessage "$state deleted"
 }
 
 proc buildExecCmd {{loadvm ""}} {
@@ -257,16 +267,15 @@ proc dragNode {W x y X Y } {
   set DnD::timer ""
   set DnD::start [$W selection]
   set node [$W identify item $x $y]
-  set nodetext [$W item $node -text]
   toplevel .dnd
   tk::label .dnd.node -relief raised -padx 5 -pady 5 \
-    -bg "white" -text $nodetext
+    -bg "white" -text [$W item $node -text]
   pack .dnd.node -in .dnd -expand true -fill both
   wm resizable .dnd 0 0
   wm geometry .dnd "+${X}+${Y}"
   wm overrideredirect .dnd true
   wm attributes .dnd -topmost true
-  $W tag bind Parent <Motion> {moveItem %W %x %y %X %Y}
+  $W tag bind File <Motion> {moveItem %W %x %y %X %Y}
   $W configure -cursor "hand2"
 }
 
@@ -289,7 +298,7 @@ proc dropNode {W x y} {
     }
   }
   set DnD::start ""
-  $W tag bind Parent <Motion> {return 0}
+  $W tag bind File <Motion> {return 0}
   destroy .dnd
 }
 
@@ -307,7 +316,7 @@ proc cancelDnD {W} {
   if {[winfo exists .dnd]} {
     $W configure -cursor "left_ptr"
     set DnD::start ""
-    $W tag bind Parent <Motion> {return 0}
+    $W tag bind File <Motion> {return 0}
     destroy .dnd
   }
 }
@@ -532,7 +541,7 @@ proc createWidgets {} {
     ttk::treeview .trv_files -takefocus 0 -selectmode browse \
       -xscrollcommand {.trv_xsb set} -yscrollcommand {.trv_ysb set}
       .trv_files heading #0 -text "\u2022 Images & Saved States:" -anchor w \
-        -command {selectQEMUImages .trv_files}
+        -command {.menu.file invoke "Select QEMU Images..."}
       .trv_files column #0 -width 0 -minwidth 750 -stretch 1
     ttk::scrollbar .trv_xsb -orient horizontal -command {.trv_files xview}
     ttk::scrollbar .trv_ysb -orient vertical   -command {.trv_files yview}
@@ -563,6 +572,9 @@ proc createWidgets {} {
 # BINDINGS
 #
 proc createBindings {} {
+  foreach keysym {<Escape> <ButtonRelease-1>} {
+    bind all $keysym {cancelDnD .trv_files}
+  }
   bind all <KP_Enter>  {event generate %W <Return>}
   bind all <F1>        {.menu.help invoke "About tQEMU..."}
   bind all <F2>        {.menu.help invoke "About Host..."}
@@ -584,19 +596,15 @@ proc createBindings {} {
   bind .ent_cdrom <ButtonRelease-3> {.menu.file invoke "Select CD-ROM Image..."}
   bind .ent_smb   <ButtonRelease-3> {.menu.file invoke "Shared Directory..."}
   bind .ent_bin   <ButtonRelease-3> {.menu.file invoke "QEMU Executable..."}
-
   bind .trv_files <ButtonRelease-3> {.menu.file invoke "Select QEMU Images..."}
-  bind .trv_files <Delete>          {deleteState [%W focus] %W}
 
+  .trv_files tag bind File  <ButtonPress-1>   {startDnD %W %x %y %X %Y}
+  .trv_files tag bind File  <ButtonRelease-1> {dropNode %W %x %y}
+  .trv_files tag bind File  <Delete>          {removeFile [%W focus] %W}
+  .trv_files tag bind State <Delete>          {deleteState [%W focus] %W}
   foreach keysym {<Return> <Double-ButtonRelease-1>} {
-    bind .trv_files $keysym {loadState [%W focus] %W}
+    .trv_files tag bind State $keysym {loadState [%W focus] %W}
   }
-  foreach keysym {<Escape> <ButtonRelease-1>} {
-    bind .trv_files $keysym {cancelDnD %W}
-  }
-
-  .trv_files tag bind Parent <ButtonPress-1>   {startDnD %W %x %y %X %Y}
-  .trv_files tag bind Parent <ButtonRelease-1> {dropNode %W %x %y}
 }
 
 ################################################################################
