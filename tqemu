@@ -267,15 +267,16 @@ proc dragNode {W x y X Y } {
   set DnD::timer ""
   set DnD::start [$W selection]
   set node [$W identify item $x $y]
+  set nodetext [$W item $node -text]
   toplevel .dnd
   tk::label .dnd.node -relief raised -padx 5 -pady 5 \
-    -bg "white" -text [$W item $node -text]
+    -bg "white" -text $nodetext
   pack .dnd.node -in .dnd -expand true -fill both
   wm resizable .dnd 0 0
   wm geometry .dnd "+${X}+${Y}"
   wm overrideredirect .dnd true
   wm attributes .dnd -topmost true
-  $W tag bind File <Motion> {moveItem %W %x %y %X %Y}
+  $W tag bind File <Motion> {moveNode %W %x %y %X %Y}
   $W configure -cursor "hand2"
 }
 
@@ -302,7 +303,7 @@ proc dropNode {W x y} {
   destroy .dnd
 }
 
-proc moveItem {W x y X Y} {
+proc moveNode {W x y X Y} {
   if {[winfo exists .dnd]} {
     set to [$W index [$W identify item $x $y]]
     if {[string is integer -strict $to]} {
