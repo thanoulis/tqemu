@@ -270,7 +270,7 @@ proc dragNode {W x y X Y } {
   set nodetext [$W item $node -text]
   toplevel .dnd
   tk::label .dnd.node -relief raised -padx 5 -pady 5 \
-    -bg "white" -text $nodetext
+    -background "white" -text $nodetext
   pack .dnd.node -in .dnd -expand true -fill both
   wm resizable .dnd 0 0
   wm geometry .dnd "+${X}+${Y}"
