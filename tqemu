@@ -6,7 +6,7 @@ package require Tk
 # VARIABLES
 #
 namespace eval tqemu {
-  variable version   {0.4.1}
+  variable version   {1.0.0}
   variable bin       [string cat "qemu-system-" $::tcl_platform(machine)]
   variable rtcbase   {utc}
   variable lrtcbase  [list utc localtime]
@@ -546,7 +546,7 @@ proc tqemu::Widgets {} {
 
   ttk::labelframe .cdrom -relief flat -text "\u2022 CD-ROM Device:"
     ttk::checkbutton .cdrom.chk -text "Host CD-ROM" -variable tqemu::cdrom \
-      -onvalue "/dev/cdrom" -offvalue ""
+      -onvalue "/dev/cdrom" -offvalue "" -command {tqemu::StartState}
     ttk::entry .cdrom.entry -takefocus 0 -state readonly -textvariable tqemu::cdrom
     grid .cdrom.chk -in .cdrom -row 0 -column 0 -sticky we
     grid .cdrom.entry   -in .cdrom -row 1 -column 0 -sticky we
