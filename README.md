@@ -1,28 +1,34 @@
 ----
 
-**tQEMU** is a simple **QEMU** frontend written in core [Tcl/Tk](https://www.tcl.tk).
+**tqemu** is a simple **QEMU** frontend written in core [Tcl/Tk](https://www.tcl.tk).
 
 ----
 
 ### Features
 
-* user defined [QEMU](https://www.qemu.org) executable
-* user defined guest CPU emulation
-* user defined guest RAM
-* user defined graphics card emulation
-* user defined sound card emulation
-* user defined network device emulation
-* load and create image (qcow2 format)
-* user defined image size
-* load states from qcow2 images
-* boot from iso file
-* shared directory between host and virtual machine
-* user defined output display (sdl, gtk, etc)
-* Toggle KVM support on/off
+* User defined [QEMU](https://www.qemu.org) executable
+* User defined guest CPU emulation
+* User defined guest RAM
+* User defined graphics card emulation
+* User defined sound card emulation
+* User defined network device emulation
+* Load and create image (qcow2 format)
+* User defined image size
+* User defined extra options
+* Load multiple images (rearrange with drag n' drop)
+* Load states from qcow2 images
+* Boot from iso file or from host cd-rom device
+* Shared directory between host and virtual machine
+* User defined output display (sdl, gtk, vnc, etc)
+* Toggle KVM, HAX, HVF support
+* Supports many audio channels (PA, OSS, DSound, etc)
+* RTC clock configuration
 * Daemonize QEMU process
+* Start paused
 * Show/copy QEMU final execute command
 * Command line support
-* Runs in GNU/Linux, MS-Windows and Unix (MacOS not tested)
+* Does not require libvirt and friends
+* Runs in GNU/Linux, Microsoft Windows and Unix (MacOS not tested)
 
 ----
 
@@ -50,7 +56,7 @@ To run it, after download, right-click->Properties->Unblock.
 
 ### License
 
-**tQEMU** is licensed under the **MIT License**.
+**tqemu** is licensed under the **MIT License**.
 
 Read [LICENSE](LICENSE) for details.
 
