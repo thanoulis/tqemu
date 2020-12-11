@@ -733,6 +733,13 @@ proc tqemu::Bindings {} {
 ################################################################################
 # MAIN PROGRAM
 #
+if {$::argc > 0} {
+  # try to avoid drawing the main window
+  wm withdraw .
+  tqemu::ReadArgs $::argv
+  exit
+}
+
 tqemu::Menus
 tqemu::Widgets
 tqemu::Bindings
@@ -741,8 +748,3 @@ wm title     . "tQEMU $tqemu::bin"
 wm minsize   . 550 290
 wm resizable . 0 0
 wm protocol  . WM_DELETE_WINDOW {exit}
-
-if {$::argc > 0} {
-  tqemu::ReadArgs $::argv
-  exit
-}
