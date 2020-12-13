@@ -28,7 +28,7 @@
 * Show/copy QEMU final execute command
 * Command line support
 * Does not require libvirt and friends
-* Runs in GNU/Linux, Microsoft Windows and Unix (MacOS not tested)
+* Runs in GNU/Linux, [Microsoft Windows](#for-microsoft-windows-users) and Unix (MacOS not tested)
 
 ----
 
@@ -48,7 +48,7 @@
 
 [ActiveTcl](https://www.activestate.com/activetcl) version 8.6 or later.
 
-Executable can be found in the [Releases](https://github.com/thanoulis/tqemu/releases) section.
+For executables go to [Releases](https://github.com/thanoulis/tqemu/releases) section, or download the [latest](https://github.com/thanoulis/tqemu/releases/latest/download/tqemu.exe).
 
 To run it, after download, right-click->Properties->Unblock.
 
