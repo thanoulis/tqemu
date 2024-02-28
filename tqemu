@@ -6,7 +6,7 @@ package require Tk
 # VARIABLES
 #
 namespace eval tqemu {
-  variable version   {1.0.2}
+  variable version   {1.0.3}
   variable bin       [string cat "qemu-system-" $::tcl_platform(machine)]
   variable rtcbase   {utc}
   variable lrtcbase  [list utc localtime]
