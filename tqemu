@@ -129,7 +129,6 @@ proc tqemu::SelectImage {tree} {
     if {$file ni [dict values $tqemu::filelist]} {
       try {
         tk busy hold .
-        update
         set statelist [exec -- qemu-img snapshot -l $file]
       } on error msg {
         tk_messageBox -title "Error loading [file tail $file]" \
@@ -179,7 +178,6 @@ proc tqemu::CreateImage {} {
   append imgsize $tqemu::imgsize "G"
   try {
     tk busy hold .
-    update
     exec -- qemu-img create -f qcow2 $filename $imgsize
   } on error msg {
     tk_messageBox -title "Error creating [file tail $filename]" \
@@ -240,7 +238,6 @@ proc tqemu::DeleteState {node tree} {
   set file [dict get $tqemu::filelist [$tree parent $node]]
   try {
     tk busy hold .
-    update
     exec -- qemu-img snapshot -d $state $file
   } on error msg {
     tk_messageBox -title "Error deleting $state" \
@@ -325,7 +322,6 @@ proc tqemu::Start {command {loadvm ""}} {
   }
   try {
     tk busy hold .
-    update
     exec  -- {*}$command
   } on error msg {
     tk_messageBox -title "Error executing $tqemu::bin" \
