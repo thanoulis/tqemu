@@ -12,7 +12,7 @@ namespace eval tqemu {
   variable lrtcbase  [list utc localtime]
   variable rtcclock  {host}
   variable lrtcclock [list host rt vm]
-  variable machine   {q35}
+  variable machine   {pc}
   variable lmachine  [list microvm pc q35 isapc none]
   variable accel     {kvm}
   variable laccel    [list kvm xen hax hvf whpx tcg]
