@@ -314,6 +314,9 @@ proc tqemu::BuildCmd {{loadvm ""}} {
 }
 
 proc tqemu::Start {command {loadvm ""}} {
+  if {$tqemu::extra ne ""} {
+    tqemu::SaveHistory $tqemu::extra
+  }
   set command [file nativename [tqemu::BuildCmd]]
   if {$tqemu::cdrom ne ""} {
     tqemu::Message "QEMU is starting $tqemu::cdrom"
@@ -615,13 +618,13 @@ proc tqemu::Widgets {} {
   ttk::labelframe .cdrom -relief flat -text "\u2022 CD-ROM Device:"
     ttk::checkbutton .cdrom.chk -text "Host CD-ROM" -variable tqemu::cdrom \
       -onvalue "/dev/cdrom" -offvalue "" -command {tqemu::StartState}
-    ttk::entry .cdrom.entry -takefocus 0 -state readonly -textvariable tqemu::cdrom
-    grid .cdrom.chk -in .cdrom -row 0 -column 0 -sticky we
-    grid .cdrom.entry   -in .cdrom -row 1 -column 0 -sticky we
+    ttk::entry .cdrom.entry -takefocus 0 -state normal -textvariable tqemu::cdrom
+    grid .cdrom.chk   -in .cdrom -row 0 -column 0 -sticky we
+    grid .cdrom.entry -in .cdrom -row 1 -column 0 -sticky we
     grid columnconfigure .cdrom .cdrom.entry -weight 1
 
   ttk::labelframe .smb -relief flat -text "\u2022 Shared Directory\n(smb://10.0.2.4/qemu):"
-    ttk::entry .smb.entry -takefocus 0 -state readonly \
+    ttk::entry .smb.entry -takefocus 0 -state normal \
       -textvariable tqemu::smb
     grid .smb.entry -in .smb -row 0 -column 0 -sticky we
     grid columnconfigure .smb .smb.entry -weight 1
