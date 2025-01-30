@@ -619,14 +619,20 @@ proc tqemu::Widgets {} {
     ttk::checkbutton .cdrom.chk -text "Host CD-ROM" -variable tqemu::cdrom \
       -onvalue "/dev/cdrom" -offvalue "" -command {tqemu::StartState}
     ttk::entry .cdrom.entry -takefocus 0 -state normal -textvariable tqemu::cdrom
-    grid .cdrom.chk   -in .cdrom -row 0 -column 0 -sticky we
-    grid .cdrom.entry -in .cdrom -row 1 -column 0 -sticky we
+    ttk::button .cdrom.button -takefocus 0 -text "..." -width 2 \
+      -command {.menu.file invoke "Select CD-ROM..."}
+    grid .cdrom.chk    -in .cdrom -row 0 -column 0 -sticky we
+    grid .cdrom.entry  -in .cdrom -row 1 -column 0 -sticky we -columnspan 2
+    grid .cdrom.button -in .cdrom -row 1 -column 1 -sticky e
     grid columnconfigure .cdrom .cdrom.entry -weight 1
 
   ttk::labelframe .smb -relief flat -text "\u2022 Shared Directory\n(smb://10.0.2.4/qemu):"
     ttk::entry .smb.entry -takefocus 0 -state normal \
       -textvariable tqemu::smb
-    grid .smb.entry -in .smb -row 0 -column 0 -sticky we
+    ttk::button .smb.button -takefocus 0 -text "..." -width 2 \
+      -command {.menu.file invoke "Shared Directory..."}
+    grid .smb.entry  -in .smb -row 0 -column 0 -sticky we -columnspan 2
+    grid .smb.button -in .smb -row 0 -column 1 -sticky e
     grid columnconfigure .smb .smb.entry -weight 1
 
   ttk::frame .cmd
